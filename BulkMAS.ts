@@ -75,7 +75,7 @@ function importer(): any {
     public async importItem(title) {
       if (!title) return
 
-      const mas: any = await this.getURI(this.uri + encodeURIComponent(`Ti='${title.replace(/'/g, '')}'`))
+      const mas: any = await this.getURI(this.uri + encodeURIComponent(`Ti='${title.toLowerCase().replace(/'/g, '')}'`))
       const article = mas && mas.entities && mas.entities.length ? mas.entities[0] : null
       if (!article) return
 
@@ -133,20 +133,20 @@ function importer(): any {
               resolve(JSON.parse(xhr.response))
 
             } catch (err) {
-              debug(`url: ${err})`)
+              debug(`${url}: ${err})`)
               resolve(null)
 
             }
 
           } else {
-            debug(`url: ${this.status} (${xhr.statusText})`)
+            debug(`${url}: ${this.status} (${xhr.statusText})`)
             resolve(null)
 
           }
         }
 
         xhr.onerror = function() {
-          debug(`url: ${this.status} (${xhr.statusText})`)
+          debug(`${url}: ${this.status} (${xhr.statusText})`)
           resolve(null)
         }
 
@@ -156,6 +156,10 @@ function importer(): any {
   }
 
   return new BulkMAS
+}
+
+function delay(ms) {
+  return () => new Promise(resolve => setTimeout(resolve, ms))
 }
 
 async function doImportAsync() {
@@ -171,10 +175,10 @@ async function doImportAsync() {
 
   const titleCol = titleColumn(items.shift())
 
-  const requests = items.map(item => mas.importItem(item[titleCol]))
   // await Promise.all(requests) // microsoft does *not* like this -- immediate 429 too many requests
-  for (const req of requests) {
-    await req
+  for (const item of items) {
+    await mas.importItem(item[titleCol])
+    await delay(50) // tslint:disable-line:no-magic-numbers
   }
 }
 
