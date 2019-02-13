@@ -6,8 +6,6 @@ function debug(msg) {
 
 function detectImport() {
   const headers = Zotero.read()
-  debug(headers)
-  debug(headers.toLowerCase().split(',').includes('title'))
   return headers.toLowerCase().split(',').includes('title')
 }
 
@@ -90,7 +88,6 @@ function get(url, key) {
 }
 
 async function doImportAsync() {
-  debug('here we go')
   const key = Zotero.getHiddenPref('bulkmas.key')
 
   if (!key) throw new Error('Ocp-Apim-Subscription-Key not set in extensions.zotero.translators.bulkmas.key')
@@ -100,10 +97,8 @@ async function doImportAsync() {
   while (_chunk = Zotero.read(1024)) { // tslint:disable-line:no-magic-numbers
     csv += _chunk
   }
-  debug(`parsing ${csv}`)
 
   const items = parse(csv)
-  debug(`found ${JSON.stringify(items)}`)
 
   const header = items.shift().map(col => col.toLowerCase())
   const titleCol = header.indexOf('title')
