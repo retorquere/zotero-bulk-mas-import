@@ -1,0 +1,36 @@
+{
+  "name": "zotero-bulk-mas-import",
+  "version": "0.0.9",
+  "description": "Bulk Microsoft Academic Search import",
+  "exporter": "BulkMAS",
+  "author": {
+    "name": "Emiliano Heyns",
+    "email": "Emiliano.Heyns@iris-advies.com"
+  },
+  "scripts": {
+    "test": "tslint -t stylish --project .",
+    "prestart": "npm test",
+    "start": "tsc && node build.js",
+    "zot": "npm start && cp \"build/$npm_package_exporter.js\" ~/.BBTZ5TEST/zotero/translators && /usr/lib/zotero/zotero -P BBTZ5TEST -ZoteroDebugText -datadir profile > ~/.BBTZ5TEST.log &",
+    "postversion": "git push --tags && npm start && npm run make-release",
+    "make-release": "github-release upload --owner retorquere --repo $npm_package_name --tag \"v$npm_package_version\" --name \"v$npm_package_version\" --body \"$npm_package_description. Drop $npm_package_exporter.js into the Zotero translators directory, and restart Zotero.\" \"build/$npm_package_exporter.js\""
+  },
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "@types/node": "^10.12.21",
+    "github-release-cli": "^1.0.1",
+    "ts-node": "^8.0.2",
+    "tslint": "^5.12.1",
+    "typescript": "^3.3.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/retorquere/zotero-bulk-mas.git"
+  },
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/retorquere/zotero-bulk-mas/issues"
+  }
+}

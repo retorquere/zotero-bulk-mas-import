@@ -1,0 +1,17 @@
+{
+  "translatorID": "7ddf943e-8729-4764-ae1e-654b56822d80",
+  "label": "BulkMAS",
+  "description": "Searches Microsoft Academic Search by title",
+  "creator": "Emiliano Heyns",
+  "target": "csv",
+  "minVersion": "4.0.27",
+  "maxVersion": "",
+  "configOptions": {
+    "async": true
+  },
+  "translatorType": 1,
+  "priority": 99,
+  "inRepository": false
+}
+
+

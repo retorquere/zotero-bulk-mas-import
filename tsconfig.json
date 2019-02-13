@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "importHelpers": true,
+    "target": "es2017",
+    "disableSizeLimit": true,
+    "module": "commonjs",
+    "noImplicitAny": false,
+    "removeComments": true,
+    "preserveConstEnums": false,
+    "sourceMap": false,
+    "downlevelIteration": true,
+    "lib": [ "es2017", "dom" ],
+    "outDir": "build",
+    "typeRoots": [
+      "./typings",
+      "./gen/typings",
+      "./node_modules/@types"
+    ]
+  },
+  "include": [
+    "*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.spec.ts",
+    "typings"
+  ]
+}
