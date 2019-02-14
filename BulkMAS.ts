@@ -59,6 +59,16 @@ function parse(csv) {
   return table
 }
 
+function li(str) {
+  return `<li>${str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+  }</li>`
+}
+
 function importer(): any {
   // lifting the class out of the global scope because the Zotero sandbox does not like global constants/classes: "redeclaration of let BulkMAS"
   class BulkMAS {
@@ -73,11 +83,11 @@ function importer(): any {
     }
 
     public async importItem(title) {
-      if (!title) return
+      if (!title) throw new Error('no title')
 
       const mas: any = await this.getURI(this.uri + encodeURIComponent(`Ti='${title.toLowerCase().replace(/'/g, '')}'`))
       const article = mas && mas.entities && mas.entities.length ? mas.entities[0] : null
-      if (!article) return
+      if (!article) throw new Error('no matches found')
 
       // https://docs.microsoft.com/en-us/azure/cognitive-services/academic-knowledge/entityattributes
       article.E = article.E ? JSON.parse(article.E) : {}
@@ -106,7 +116,7 @@ function importer(): any {
             abstract[pos] = word
           }
         }
-        item.abstractNode = abstract.join(' ')
+        item.abstractNote = abstract.join(' ')
       }
 
       if (itemType === 'journalArticle') {
@@ -122,7 +132,7 @@ function importer(): any {
     }
 
     private getURI(url) {
-      return new Promise(resolve => {
+      return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest()
         xhr.open('GET', url)
         xhr.setRequestHeader('Ocp-Apim-Subscription-Key', this.key)
@@ -133,21 +143,19 @@ function importer(): any {
               resolve(JSON.parse(xhr.response))
 
             } catch (err) {
-              debug(`${url}: ${err})`)
-              resolve(null)
+              reject(err.message || `${err}`)
 
             }
 
           } else {
-            debug(`${url}: ${this.status} (${xhr.statusText})`)
-            resolve(null)
+            reject(`${this.status} (${xhr.statusText})`)
 
           }
         }
 
         xhr.onerror = function() {
           debug(`${url}: ${this.status} (${xhr.statusText})`)
-          resolve(null)
+          reject(`${this.status} (${xhr.statusText})`)
         }
 
         xhr.send()
@@ -158,11 +166,29 @@ function importer(): any {
   return new BulkMAS
 }
 
+/*
 function delay(ms) {
-  return () => new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+*/
+// Zotero sandbox does not allow setTimeout... oy
+function delay(milliseconds) {
+  const start = new Date().getTime()
+  while ((new Date().getTime() - start) < milliseconds) {
+    // busy waiting...
+  }
 }
 
 async function doImportAsync() {
+  let rateLimit
+  const defaultRateLimit = 1500
+
+  try {
+    rateLimit = Zotero.getHiddenPref('bulkmas.delay') || defaultRateLimit
+  } catch (err) {
+    rateLimit = defaultRateLimit
+  }
+
   const mas = importer()
 
   let _chunk
@@ -175,10 +201,37 @@ async function doImportAsync() {
 
   const titleCol = titleColumn(items.shift())
 
-  // await Promise.all(requests) // microsoft does *not* like this -- immediate 429 too many requests
+  Zotero.setProgress(0)
+
+  let imported = 0
+  const errors = []
+  // await Promise.all(requests) // immediately hits the one-per-second rate limit
   for (const item of items) {
-    await mas.importItem(item[titleCol])
-    await delay(50) // tslint:disable-line:no-magic-numbers
+    imported += 1
+
+    const title = item[titleCol]
+    if (title) {
+      try {
+        await mas.importItem(title)
+
+      } catch (err) {
+        errors.push(`${title}: ${err}`)
+        await delay(rateLimit) // assume we've hit a rate limit and add one extra delay cycle
+
+      }
+
+      debug(`waiting ${rateLimit}ms...`)
+      await delay(rateLimit)
+      debug('proceeding')
+    }
+
+    Zotero.setProgress((imported / items.length) * 100) // tslint:disable-line:no-magic-numbers
+  }
+
+  if (errors.length > 0) {
+    const item = new Zotero.Item('note')
+    item.note = `Import errors found: <ul>${errors.map(li).join('\n')}</ul>`
+    await item.complete()
   }
 }
 
@@ -187,6 +240,9 @@ async function doImport() {
   try {
     await doImportAsync()
   } catch (err) {
+    const item = new Zotero.Item('note')
+    item.note = `Import errors found: <p>${err}</p>`
+    await item.complete()
     debug(err)
   }
 }
