@@ -178,8 +178,8 @@ function importer(): any {
     private async importFallbackItem(sample) {
       const item = new Zotero.Item('journalArticle')
       item.title = sample.Title
-      item.DOI = sample.doi
-      item.url = sample.url
+      item.DOI = sample.DOI
+      item.url = sample.URL
       await item.complete()
     }
 
@@ -245,7 +245,11 @@ async function doImportAsync() {
   const items = parse(csv)
 
   const headerRow = items.shift().map(col => col.toLowerCase().trim())
-  const titleCol = columnIndex(headerRow, 'title', true)
+  const index = {
+    title:  columnIndex(headerRow, 'title', true),
+    url:  columnIndex(headerRow, 'url', true),
+    doi:  columnIndex(headerRow, 'doi', true),
+  }
 
   Zotero.setProgress(0)
 
@@ -256,7 +260,9 @@ async function doImportAsync() {
     imported += 1
 
     const item = Object.assign({}, ...headerRow.map((col, i) => ({[col]: row[i]})))
-    item.Title = row[titleCol]
+    item.Title = row[index.title]
+    if (index.url >= 0) item.URL = row[index.url]
+    if (index.doi >= 0) item.DOI = row[index.doi]
 
     if (item.Title) {
       try {
