@@ -4,14 +4,17 @@ function debug(msg) {
   Zotero.debug(`BulkMAS: ${msg}`)
 }
 
-function titleColumn(header) {
-  return header.findIndex(col => col.toLowerCase().split(' ').includes('title'))
+function columnIndex(headerRow, text, anyWord = false) {
+  text = text.toLowerCase()
+  if (anyWord) return headerRow.findIndex(col => col.split(' ').includes(text))
+  return headerRow.find(col => col === text)
 }
 
 function detectImport() {
-  const headers = Zotero.read()
-  debug(`detectImport: ${headers} = ${titleColumn(headers.split(','))}`)
-  return titleColumn(headers.split(',')) >= 0
+  const headerRow = Zotero.read().split(',').map(col => col.toLowerCase().trim())
+  const titleCol = columnIndex(headerRow, 'title', true)
+  debug(`detectImport: ${headerRow} = ${titleCol}`)
+  return titleCol >= 0
 }
 
 // https://stackoverflow.com/a/12785546/2541040
@@ -62,7 +65,7 @@ function parse(csv) {
 function importer(): any {
   // lifting the class out of the global scope because the Zotero sandbox does not like global constants/classes: "redeclaration of let BulkMAS"
   class BulkMAS {
-    private key: string
+    public key: string
     private interpret: string
     private evaluate: string
     private delay: number
@@ -99,13 +102,17 @@ function importer(): any {
       await this.getJSON(`https://reqres.in/api/users?delay=${this.delay}`)
     }
 
-    public async importItem(title) {
-      if (!title) throw new Error('no title')
+    public async importItem(sample) {
+      if (!sample.Title) throw new Error('no title')
 
       await this.sleep()
 
-      const interpret: any = await this.getJSON(this.interpret + encodeURIComponent(title))
-      if (!interpret) throw new Error('no response on interpret')
+      const interpret: any = await this.getJSON(this.interpret + encodeURIComponent(sample.Title))
+      if (!interpret) {
+        await this.importFallbackItem(sample)
+        return 'MAS could not interpret this title'
+      }
+
       let query = null
       for (const interpretation of interpret.interpretations) {
         for (const rule of interpretation.rules) {
@@ -114,11 +121,17 @@ function importer(): any {
         }
         if (query) break
       }
-      if (!query) throw new Error('no query from interpret')
+      if (!query) {
+        await this.importFallbackItem(sample)
+        return 'MAS did not provide a query for this title'
+      }
 
       const evaluate: any = await this.getJSON(this.evaluate + encodeURIComponent(query))
       const article = evaluate && evaluate.entities && evaluate.entities.length ? evaluate.entities[0] : null
-      if (!article) throw new Error('no matches found')
+      if (!article) {
+        await this.importFallbackItem(sample)
+        return 'MAS found no matches'
+      }
 
       // https://docs.microsoft.com/en-us/azure/cognitive-services/academic-knowledge/entityattributes
       article.E = article.E ? JSON.parse(article.E) : {} // for some reason this is sent out as a JSON-encoded-JSON-encoded string
@@ -159,6 +172,14 @@ function importer(): any {
 
       item.volume = article.E.V
 
+      await item.complete()
+    }
+
+    private async importFallbackItem(sample) {
+      const item = new Zotero.Item('journalArticle')
+      item.title = sample.Title
+      item.DOI = sample.doi
+      item.url = sample.url
       await item.complete()
     }
 
@@ -223,26 +244,35 @@ async function doImportAsync() {
 
   const items = parse(csv)
 
-  const titleCol = titleColumn(items.shift())
+  const headerRow = items.shift().map(col => col.toLowerCase().trim())
+  const titleCol = columnIndex(headerRow, 'title', true)
 
   Zotero.setProgress(0)
 
   let imported = 0
   const errors = []
   // await Promise.all(requests) // immediately hits the one-per-second rate limit
-  for (const item of items) {
+  for (const row of items) {
     imported += 1
 
-    const title = item[titleCol]
-    if (title) {
+    const item = Object.assign({}, ...headerRow.map((col, i) => ({[col]: row[i]})))
+    item.Title = row[titleCol]
+
+    if (item.Title) {
       try {
-        await mas.importItem(title)
-        debug(`imported ${title}`)
+        const error = await mas.importItem(item)
+        if (error) {
+          debug(error)
+          errors.push({ title: item.Title, message: `${error}` })
+
+        } else {
+          debug(`imported ${item.Title}`)
+        }
 
       } catch (err) {
         debug(err)
-        errors.push({ title, message: `${err}` })
-        await mas.sleep() // assume we've hit a rate limit and add one extra delay cycle
+        errors.push({ title: item.Title, message: `${err}` })
+        await mas.sleep() // unexpected error, assume we've hit a rate limit and add one extra delay cycle
 
       }
 
