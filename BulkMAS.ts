@@ -140,7 +140,7 @@ function importer(): any {
       const item = new Zotero.Item(itemType)
 
       item.date = article.D || article.Y
-      item.tags = article.W || []
+      item.tags = (article.W || []).map(tag => ({ tag, type: 1}))
 
       item.title = article.E.DN
       if (article.E.S) item.url = article.E.S[0].U
