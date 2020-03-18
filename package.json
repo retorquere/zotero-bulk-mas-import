@@ -19,7 +19,7 @@
     "test": "test"
   },
   "dependencies": {
-    "@types/node": "^11.9.4",
+    "@types/node": "^11.15.7",
     "github-release-cli": "^1.0.1",
     "ts-node": "^8.0.2",
     "tslint": "^5.12.1",
